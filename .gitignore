@@ -1,0 +1,5 @@
+.cache
+builddir
+build
+.idea
+.vscode

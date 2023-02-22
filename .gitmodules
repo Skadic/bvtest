@@ -1,0 +1,9 @@
+[submodule "subprojects/BitMagic"]
+	path = subprojects/BitMagic
+	url = https://github.com/tlk00/BitMagic
+[submodule "subprojects/DYNAMIC"]
+	path = subprojects/DYNAMIC
+	url = https://github.com/vgteam/DYNAMIC
+[submodule "subprojects/la_vector"]
+	path = subprojects/la_vector
+	url = https://github.com/gvinciguerra/la_vector
