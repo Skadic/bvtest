@@ -9,12 +9,13 @@
 #include <bm64.h>
 #include <dynamic/dynamic.hpp>
 #include <la_vector.hpp>
+#include <sdsl/sd_vector.hpp>
 
 #define PROJECT_NAME "bvtest"
 
-#define QUERIES static_cast<size_t>(10000000)
+#define QUERIES static_cast<size_t>(1000000)
 #define N       static_cast<size_t>(10000000)
-#define FILL    0.05
+#define FILL    0.1
 static_assert(0 <= FILL && FILL <= 1, "fill rate must be between 0 and 1");
 
 using Time  = timespec;
@@ -59,7 +60,6 @@ void test_bm(const std::vector<bool> &bits) {
     bv.optimize();
     bv.freeze();
     bv.build_rs_index(&rs);
-    std::cout << ds << std::endl;
 
     {
         auto gen = std::bind(std::uniform_int_distribution<size_t>(0, N - 1), std::default_random_engine());
@@ -94,9 +94,10 @@ void test_bm(const std::vector<bool> &bits) {
 }
 
 void test_dyn_succ(const std::vector<bool> &bits) {
-    auto                                        ds = "dynsucc";
-    double                                      rank_ms, select_ms;
-    size_t                                      rank_checksum = 0, select_checksum = 0, bytes;
+    auto   ds = "dynsucc";
+    double rank_ms, select_ms;
+    size_t rank_checksum = 0, select_checksum = 0, bytes;
+
     dyn::succinct_bitvector<dyn::succinct_spsi> bv;
     for (size_t i = 0; i < N; i++) {
         bv.push_back(bits[i]);
@@ -130,6 +131,59 @@ void test_dyn_succ(const std::vector<bool> &bits) {
     print_result_line(ds, rank_ms, select_ms, bytes, rank_checksum, select_checksum);
 }
 
+void test_sdvec(const std::vector<bool> &bits) {
+    auto            ds = "sdvector";
+    double          rank_ms, select_ms;
+    size_t          rank_checksum = 0, select_checksum = 0, bytes = 0;
+
+    sdsl::sd_vector bv;
+    {
+        size_t one_count = 0;
+        for (bool b : bits | std::views::filter([](bool i) { return i; })) {
+            one_count++;
+        }
+        std::cout << "n: " << bits.size() << ", m: " << one_count << std::endl;
+
+        sdsl::sd_vector_builder svb(bits.size(), one_count);
+        for (size_t i = 0; i < bits.size(); i++) {
+            if (bits[i]) {
+                svb.set(i);
+            }
+        }
+        bv = sdsl::sd_vector(svb);
+    }
+
+    sdsl::rank_support_sd rnk(&bv);
+    sdsl::select_support_sd sel(&bv);
+
+    {
+        auto gen = std::bind(std::uniform_int_distribution<size_t>(0, N - 1), std::default_random_engine());
+        Time now, then;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
+        for (size_t i = 0; i < QUERIES; i++) {
+            rank_checksum += rnk.rank(gen() + 1);
+        }
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &then);
+        rank_ms = duration(then, now);
+    }
+
+    {
+        const auto num_ones = rnk.rank(bits.size()) - 1;
+        auto       gen = std::bind(std::uniform_int_distribution<size_t>(1, num_ones), std::default_random_engine());
+        Time       now, then;
+
+        // Select Queries
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
+        for (size_t i = 0; i < QUERIES; i++) {
+            select_checksum += sel.select(gen());
+        }
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &then);
+        select_ms = duration(then, now);
+    }
+
+    print_result_line(ds, rank_ms, select_ms, bytes, rank_checksum, select_checksum);
+}
+
 void test_la(const std::vector<bool> &bits) {
     auto                ds = "la_vector";
     double              rank_ms, select_ms;
@@ -149,7 +203,7 @@ void test_la(const std::vector<bool> &bits) {
 
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
         for (size_t i = 0; i < QUERIES; i++) {
-            rank_checksum += bv.rank(gen());
+            rank_checksum += bv.rank(gen() + 1);
         }
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &then);
         rank_ms = duration(then, now);
@@ -181,6 +235,7 @@ auto main(int argc, char **argv) -> int {
     const auto bits = gen_bits();
     std::cout << "Starting benchmarks, " << QUERIES << " each..." << std::endl;
 
+    test_sdvec(bits);
     test_dyn_succ(bits);
     test_bm(bits);
     test_la(bits);

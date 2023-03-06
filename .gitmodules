@@ -7,3 +7,6 @@
 [submodule "subprojects/la_vector"]
 	path = subprojects/la_vector
 	url = https://github.com/gvinciguerra/la_vector
+[submodule "subprojects/sdsl-lite"]
+	path = subprojects/sdsl-lite
+	url = https://github.com/Skadic/sdsl-lite
